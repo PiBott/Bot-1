@@ -16,17 +16,20 @@ import plotly.graph_objects as plot
 # Clase con los datos y las funciones
 class BinanceClass:
 
-    # Constructor de la clase
+    #CONSTRUCTOR
+    #_________________________________________________________________________________________________
     def __init__(self, API_Key, Secret_Key, CoinPair, Frequency, FechaInicio, FechaFinal):
 
         self.PublicKey = API_Key
         self.PrivateKey = Secret_Key
         self.CoinPair = CoinPair
 
+        ######ALGUNO TIENE 4 CARACTERES######
         self.Crypto = CoinPair[0] + CoinPair[1] + CoinPair[2]
         self.Fiat = CoinPair[3] + CoinPair[4] + CoinPair[5]
 
         self.Frequency = Frequency
+        #####AÑADIR COMPROBACION FRECUENCIA CORRECTA (CON EL DATAFRAME)######
 
         self.FechaInicio = FechaInicio
         self.FechaFinal = FechaFinal
@@ -36,6 +39,7 @@ class BinanceClass:
                         int(FechaInicio[14:16]), int(FechaInicio[17:19]))
         FF = FechaFinal
         self.Total_Time = math.floor((FF - FI).total_seconds())
+        ######ELIMINAR EL ULTIMO CARACTER UNICAMENTE Y VER QUÉ CARACTER ES (m, h, d, W o M)######
 
         if "m" in self.Frequency:
             if(len(self.Frequency)) == 2:
@@ -54,7 +58,7 @@ class BinanceClass:
         elif "d" in self.Frequency:
             self.CandleSeconds = 86400*float(self.Frequency[0])
             self.CandleMinutes = 24*60*int(self.Frequency[0])
-        elif "W" in self.Frequency:
+        elif "w" in self.Frequency:
             self.CandleSeconds = 7*86400*float(self.Frequency[0])
             self.CandleMinutes = 7*24*60*int(self.Frequency[0])
         elif "M" in self.Frequency:
@@ -83,18 +87,20 @@ class BinanceClass:
 
         self.market_order = False
 
-        #Informacion
-        self.info = self.binance_client.get_symbol_info(self.CoinPair) #Informacion sobre el par
+        #Informacion IMPORTANTE!!!!!!
+        self.infoCoin = self.binance_client.get_symbol_info(self.CoinPair) #Informacion sobre el par
 
-        self.min_cantidad = float(self.info["filters"][2].get("minQty")) #Múltiplo minimo de compra de la moneda
-        self.max_cantidad = float(self.info["filters"][2].get("maxQty")) #Maxima cantidad de compra de la moneda
-        self.min_notional = float(self.info["filters"][3].get("minNotional")) #Cantidad mínima a comprar de la moneda
+        self.min_multiplo_trade = float(self.infoCoin["filters"][2].get("minQty")) #Múltiplo minimo de compra de la moneda
+        self.max_cantidad_trade = float(self.infoCoin["filters"][2].get("maxQty")) #Maxima cantidad de compra de la moneda
+        self.min_notional_trade = float(self.infoCoin["filters"][3].get("minNotional")) #Cantidad mínima a comprar de la moneda
 
         #Informacion sobre el balance de la cuenta (libre, no en operaciones)
-        self.cantidad_crypto = self.binance_client.get_asset_balance(asset = self.Crypto).get("free")
-        self.cantidad_fiat = self.binance_client.get_asset_balance(asset = self.Fiat).get("free")
+        #self.cantidad_crypto = self.binance_client.get_asset_balance(asset = self.Crypto).get("free")
+        #self.cantidad_fiat = self.binance_client.get_asset_balance(asset = self.Fiat).get("free")
 
         self.cantidad_orden = 1.0
+    #________________________________________________________________________________________________________________
+    #FIN CONSTRUCTOR
 
     # Display de las keys de Binance
     def display_keys(self):
@@ -138,6 +144,12 @@ class BinanceClass:
         self.df = self.data_filter(data)
 
     #Convertir los datos que proporciona la API a un Dataframe
+
+    #####IMPORTANTE MIRAR EL USO DE LAS COLUMNAS 10 Y 9 DE LOS DATOS DE BINANCE
+    #BTCUSDT
+    # 10 -> Taker buy quote asset volume -> total de monedas (crypto) que ha recibido el comprador)  (BTC)
+    # 9 -> Taker buy quote asset volume (USDT)
+    # OPCION PARA CALCULAR EL MAKER BUY
     def data_filter(self, data):
         df = pd.DataFrame(data)
         df = df.drop([6, 7, 9, 10, 11], axis=1)
@@ -149,9 +161,11 @@ class BinanceClass:
             df[i] = df[i].astype(float)
 
         df["start"] = pd.to_datetime(df["time"]*1000000) #Pasar los milisegundos a horario UTC
-        df["MediaMovil_R"] = np.nan #Media movil rapida (llenar columna)
-        df["MediaMovil_L"] = np.nan #Media movil lenta (llenar columna)
+        #df["MediaMovil_R"] = np.nan #Media movil rapida (llenar columna) CAMBIAR, PONER EN OTRA FUNCION
+        #df["MediaMovil_L"] = np.nan #Media movil lenta (llenar columna) CAMBIAR, PONER EN OTRA FUNCION
         return df
+
+    ##### NUEVA FUNCION AÑADIR COLUMNA PARA CADA INDICADOR #####
 
     #Actualizar a los ultimos datos registrados por Binance
     def update_data(self):
@@ -163,30 +177,36 @@ class BinanceClass:
         self.df.index = list(range(self.DataElements))
 
     #Ejecucion de las ordenes de compra o venta del bot
-    def open_order(self, operacion, cantidad):
+    #####PONER COMO INPUT EL TYPE DE ORDEN (MARKET, LIMIT)
+    def open_order(self, op_type, operacion, cantidad):
         try:
             self.opened_order = self.binance_client.create_order(
                 symbol = self.CoinPair,
                 side = operacion,
-                type = "MARKET",
+                type = op_type,
                 quantity = cantidad
             )
         except BinanceAPIException as e:
             print(e)
 
-    # Registro de la actividad del bot (para escribir la ordenes en un txt por ejemplo)
+    # Registro de la actividad del bot (para escribir las ordenes en un txt)
+
+    #### FUNCION PARA ESCRIBIR COSAS EN TXT DE FORMA GENERICA  (inputs nombre archivo con string, mas strings a escribir) ####
     def registro_orden(self, tipo_orden_ejecutada, comision, moneda_comision, PRECIO = "NONE"):
-        if os.path.exists("Log_{}_{}_BOT.txt".format(self.CoinPair, self.Frequency)): #Opcion con el txt ya creado
-            f1 = open("Log_{}_{}_BOT.txt".format(self.CoinPair, self.Frequency),"a+")
-            f1.write("{}\t{}\t{}\t{}\t{}\t{}\n".format(str(dt.datetime.now()), tipo_orden_ejecutada, str(PRECIO), str(self.cantidad_orden), comision, moneda_comision))
-            f1.close()
-            print("Nueva orden: {}\t{}\t{}\t{}\t{}\t{}\n".format(str(dt.datetime.now()), tipo_orden_ejecutada, str(PRECIO), str(self.cantidad_orden), comision, moneda_comision))
-        else:
-            f1 = open("Log_{}_{}_BOT.txt".format(self.CoinPair, self.Frequency),"a+")
+        f1 = open("Log_{}_{}_BOT.txt".format(self.CoinPair, self.Frequency), "a+")
+        if os.stat("Log_{}_{}_BOT.txt".format(self.CoinPair, self.Frequency)).st_size == 0:
             f1.write("FECHA \t ORDEN \t PRECIO \t CANTIDAD \t COMISIÓN \t MONEDA COMISIÓN\n")
-            f1.write("{}\t{}\t{}\t{}\t{}\t{}\n".format(str(dt.datetime.now()), tipo_orden_ejecutada, str(PRECIO), str(self.cantidad_orden), comision, moneda_comision))
-            f1.close()
-            print("Nueva orden: {}\t{}\t{}\t{}\t{}\t{}\n".format(str(dt.datetime.now()), tipo_orden_ejecutada, str(PRECIO), str(self.cantidad_orden), comision, moneda_comision))
+
+        f1.write("{}\t{}\t{}\t{}\t{}\t{}\n".format(str(dt.datetime.now()), tipo_orden_ejecutada, str(PRECIO),
+                                                       str(self.cantidad_orden), comision, moneda_comision))
+        f1.close()
+
+    #Funcion para el registro de las monedas en la cartera
+    #def registro_cartera(self):
+      #  if os.path.exists("Cartera_{}_BOT.txt".format(self.Crypto)):
+          #  file = open("Cartera_{}_BOT.txt".format(self.Crypto);"a+")
+          #  file.write("{}\t{}\t{}\n".format(dt.datetime.now(), self.Crypto, self.Fiat))
+
 
     # Funcion para notificar que se acaba de fillear una orden
     def notify_order(self):
@@ -226,5 +246,23 @@ class BinanceClass:
             tiempo_operacion = time.time() - tiempo_inicio #Tiempo de las oepraciones ejecutadas en single_operation()
             time.sleep(self.CandleSeconds - tiempo_operacion) #Tiempo hasta seguir con la siguiente vela, de esta forma no se repiten las velas
 
+
+    ##### CREAR UNA CLASE COMPLETA PARA DETERMINAR SI HAY QUE COMPRAR O VENDER (RETURN BOOL) ####
+
+
+
     # Funcion que ejecuta todas las funcionalidades del bot
-    #
+    # Single operation function
+        #Update Data
+        #Analizar los datos, comprobar indicadores
+        #Determinar si hay que comprar (en caso de no tener nada comprado) o vender (en caso de tener algo comprado)
+        #Actualizar los datos sobre crypto y fiat en la cartera (pedir infor a binance)
+
+        #CASO 1 (IF) (ORDEN DE COMPRA ABIERTA, HAY CRYPTO EN CARTERA)
+            #SE DETERMINA SI LOS INDICADORES DICEN VENTA
+            #SI NO HAY VENTA SE PASA, SE VUELVE AL INICIO A ACTUALIZAR DATOS Y CALCULAR NUEVOS INDICADORES
+
+        #CASO 2 (IF) (NO HAY ORDENES ABIERTAS, NO HAY CRYPTO EN CARTERA, SOLO FIAT)
+            #SE DETERMINA SI LOS INDICAODRES DICEN COMPRA (POR AHORA NO SHORTS)
+                #SI DICEN COMPRA -> SE COMPRA, SE REGISTRA EL TRADE, Y VUELTA A EMPEZAR
+                #SI NO DICE COMPRA -> SE VUELVE AL INICIO A ESPERAR A LA SIGUIENTE VELA
