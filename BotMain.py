@@ -14,3 +14,5 @@ Bot_1.display_elements()
 Bot_1.get_initial_candle_data()
 
 Bot_1.display_candles_chart(Bot_1.df)
+
+# Esta es la prueba 2 para ver si funcion github
