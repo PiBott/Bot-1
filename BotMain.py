@@ -14,11 +14,3 @@ Bot_1.display_elements()
 Bot_1.get_initial_candle_data()
 
 Bot_1.display_candles_chart(Bot_1.df)
-
-# Esta es la prueba 2 para ver si funcion github
-<<<<<<< HEAD
-
-# Esta es la prueba para ver si el github es mejor que el git de los cojones
-=======
-# Jose mamarracho
->>>>>>> d9a5e659edc554770b34fa3a0e4223eea3b4bbe2
