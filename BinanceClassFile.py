@@ -192,6 +192,7 @@ class BinanceClass:
     # Registro de la actividad del bot (para escribir las ordenes en un txt)
 
     #### FUNCION PARA ESCRIBIR COSAS EN TXT DE FORMA GENERICA  (inputs nombre archivo con string, mas strings a escribir) ####
+    #### TRABAJO CHINOFARMER GUILLE ####
     def registro_orden(self, tipo_orden_ejecutada, comision, moneda_comision, PRECIO = "NONE"):
         f1 = open("Log_{}_{}_BOT.txt".format(self.CoinPair, self.Frequency), "a+")
         if os.stat("Log_{}_{}_BOT.txt".format(self.CoinPair, self.Frequency)).st_size == 0:
